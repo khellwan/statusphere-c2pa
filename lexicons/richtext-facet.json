@@ -1,0 +1,75 @@
+{
+  "lexicon": 1,
+  "id": "app.bsky.richtext.facet",
+  "description": "Annotation of a sub-string within rich text.",
+  "defs": {
+    "main": {
+      "type": "object",
+      "required": ["index", "features"],
+      "properties": {
+        "index": {
+          "type": "ref",
+          "ref": "#byteSlice"
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "union",
+            "refs": ["#mention", "#link", "#tag"]
+          }
+        }
+      }
+    },
+    "mention": {
+      "type": "object",
+      "description": "Facet feature for mention of another account. The text is usually a handle, including a '@' prefix, but the facet reference is a DID.",
+      "required": ["did"],
+      "properties": {
+        "did": {
+          "type": "string",
+          "format": "did"
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "description": "Facet feature for a URL. The text URL may have been simplified or truncated, but the facet reference should be a complete URL.",
+      "required": ["uri"],
+      "properties": {
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "tag": {
+      "type": "object",
+      "description": "Facet feature for a hashtag. The text usually includes a '#' prefix, but the facet reference should not (except in the case of 'double hash tags').",
+      "required": ["tag"],
+      "properties": {
+        "tag": {
+          "type": "string",
+          "maxLength": 640,
+          "maxGraphemes": 64
+        }
+      }
+    },
+    "byteSlice": {
+      "type": "object",
+      "description": "Specifies the sub-string range a facet feature applies to. Start and end indices are for UTF-8 encoded bytes, not Unicode code points.",
+      "required": ["byteStart", "byteEnd"],
+      "properties": {
+        "byteStart": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Inclusive start index of the byte range."
+        },
+        "byteEnd": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exclusive (non-inclusive) end index of the byte range."
+        }
+      }
+    }
+  }
+}

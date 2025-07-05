@@ -238,6 +238,43 @@ export const schemaDict = {
       },
     },
   },
+  AppBskyFeedPost: {
+    lexicon: 1,
+    id: 'app.bsky.feed.post',
+    defs: {
+      main: {
+        type: 'record',
+        description: 'Record containing a Bluesky post.',
+        key: 'tid',
+        record: {
+          type: 'object',
+          required: ['text', 'createdAt'],
+          properties: {
+            text: {
+              type: 'string',
+              maxLength: 3000,
+              maxGraphemes: 300,
+              description: 'The primary post content. May be an empty string, if there are embeds.',
+            },
+            langs: {
+              type: 'array',
+              description: 'Indicates human language of post primary text content.',
+              maxLength: 3,
+              items: {
+                type: 'string',
+                format: 'language',
+              },
+            },
+            createdAt: {
+              type: 'string',
+              format: 'datetime',
+              description: 'Client-declared timestamp when this post was originally created.',
+            },
+          },
+        },
+      },
+    },
+  },
   XyzStatusphereStatus: {
     lexicon: 1,
     id: 'xyz.statusphere.status',
@@ -291,6 +328,7 @@ export const lexicons: Lexicons = new Lexicons(schemas)
 export const ids = {
   ComAtprotoLabelDefs: 'com.atproto.label.defs',
   AppBskyActorProfile: 'app.bsky.actor.profile',
+  AppBskyFeedPost: 'app.bsky.feed.post',
   XyzStatusphereStatus: 'xyz.statusphere.status',
   ComAtprotoRepoStrongRef: 'com.atproto.repo.strongRef',
 }
