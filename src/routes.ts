@@ -156,6 +156,15 @@ export const createRouter = (ctx: AppContext) => {
         .orderBy('indexedAt', 'desc')
         .limit(10)
         .execute()
+      
+      // Fetch posts from the new table
+      const posts = await ctx.db
+        .selectFrom('post')
+        .selectAll()
+        .orderBy('indexedAt', 'desc')
+        .limit(10)
+        .execute()
+        
       const myStatus = agent
         ? await ctx.db
             .selectFrom('status')
@@ -165,14 +174,25 @@ export const createRouter = (ctx: AppContext) => {
             .executeTakeFirst()
         : undefined
 
-      // Map user DIDs to their domain-name handles
-      const didHandleMap = await ctx.resolver.resolveDidsToHandles(
-        statuses.map((s) => s.authorDid)
-      )
+      const myLatestPost = agent
+        ? await ctx.db
+            .selectFrom('post')
+            .selectAll()
+            .where('authorDid', '=', agent.assertDid)
+            .orderBy('indexedAt', 'desc')
+            .executeTakeFirst()
+        : undefined
+
+      // Map user DIDs to their domain-name handles (include both statuses and posts)
+      const allAuthorDids = [
+        ...statuses.map((s) => s.authorDid),
+        ...posts.map((p) => p.authorDid)
+      ]
+      const didHandleMap = await ctx.resolver.resolveDidsToHandles(allAuthorDids)
 
       if (!agent) {
         // Serve the logged-out view
-        return res.type('html').send(page(home({ statuses, didHandleMap })))
+        return res.type('html').send(page(home({ statuses, posts, didHandleMap })))
       }
 
       // Fetch additional information about the logged-in user
@@ -195,9 +215,11 @@ export const createRouter = (ctx: AppContext) => {
         page(
           home({
             statuses,
+            posts,
             didHandleMap,
             profile,
             myStatus,
+            myLatestPost,
           })
         )
       )

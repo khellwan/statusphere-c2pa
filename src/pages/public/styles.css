@@ -210,3 +210,191 @@ button:hover, .button:hover {
   text-wrap: balance;
   margin-top: 1rem;
 }
+
+/*
+  Post composer and timeline styles
+*/
+.post-composer {
+  margin-bottom: 20px;
+}
+
+.composer-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 12px 16px;
+  cursor: pointer;
+  color: var(--gray-500);
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--gray-700);
+  background-color: var(--gray-100);
+}
+
+.tab-btn.active {
+  color: var(--primary-500);
+  border-bottom-color: var(--primary-500);
+}
+
+.post-form {
+  display: block;
+}
+
+.post-textarea {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.post-textarea:focus {
+  outline: none;
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 1px var(--primary-500);
+}
+
+.post-tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.char-count {
+  font-size: 14px;
+  color: var(--gray-500);
+}
+
+.post-btn {
+  background-color: var(--primary-500);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.post-btn:hover:not(:disabled) {
+  background-color: var(--primary-600);
+}
+
+.post-btn:disabled {
+  background-color: var(--gray-500);
+  cursor: not-allowed;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.post-item {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background-color: #fff;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.post-item:not(.no-line)::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  background-color: var(--border-color);
+  left: 22px;
+  bottom: calc(100% + 4px);
+  height: 8px;
+}
+
+.post-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background-color: var(--primary-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.post-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.post-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.post-header .author {
+  font-weight: 600;
+  color: var(--gray-700);
+  text-decoration: none;
+}
+
+.post-header .author:hover {
+  text-decoration: underline;
+}
+
+.post-header .date {
+  color: var(--gray-500);
+  font-size: 14px;
+}
+
+.post-text {
+  color: var(--gray-700);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.post-text .mention {
+  color: var(--primary-500);
+  font-weight: 500;
+}
+
+.post-text .hashtag {
+  color: var(--primary-500);
+  font-weight: 500;
+}
+
+.post-text a {
+  color: var(--primary-500);
+  text-decoration: none;
+}
+
+.post-text a:hover {
+  text-decoration: underline;
+}
+
+.post-langs {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--gray-500);
+  font-style: italic;
+}
