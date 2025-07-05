@@ -16,9 +16,99 @@ export function createServer(options?: XrpcOptions): Server {
 
 export class Server {
   xrpc: XrpcServer
+  xyz: XyzNS
+  app: AppNS
+  com: ComNS
 
   constructor(options?: XrpcOptions) {
     this.xrpc = createXrpcServer(schemas, options)
+    this.xyz = new XyzNS(this)
+    this.app = new AppNS(this)
+    this.com = new ComNS(this)
+  }
+}
+
+export class XyzNS {
+  _server: Server
+  statusphere: XyzStatusphereNS
+
+  constructor(server: Server) {
+    this._server = server
+    this.statusphere = new XyzStatusphereNS(server)
+  }
+}
+
+export class XyzStatusphereNS {
+  _server: Server
+
+  constructor(server: Server) {
+    this._server = server
+  }
+}
+
+export class AppNS {
+  _server: Server
+  bsky: AppBskyNS
+
+  constructor(server: Server) {
+    this._server = server
+    this.bsky = new AppBskyNS(server)
+  }
+}
+
+export class AppBskyNS {
+  _server: Server
+  feed: AppBskyFeedNS
+  actor: AppBskyActorNS
+
+  constructor(server: Server) {
+    this._server = server
+    this.feed = new AppBskyFeedNS(server)
+    this.actor = new AppBskyActorNS(server)
+  }
+}
+
+export class AppBskyFeedNS {
+  _server: Server
+
+  constructor(server: Server) {
+    this._server = server
+  }
+}
+
+export class AppBskyActorNS {
+  _server: Server
+
+  constructor(server: Server) {
+    this._server = server
+  }
+}
+
+export class ComNS {
+  _server: Server
+  atproto: ComAtprotoNS
+
+  constructor(server: Server) {
+    this._server = server
+    this.atproto = new ComAtprotoNS(server)
+  }
+}
+
+export class ComAtprotoNS {
+  _server: Server
+  repo: ComAtprotoRepoNS
+
+  constructor(server: Server) {
+    this._server = server
+    this.repo = new ComAtprotoRepoNS(server)
+  }
+}
+
+export class ComAtprotoRepoNS {
+  _server: Server
+
+  constructor(server: Server) {
+    this._server = server
   }
 }
 
