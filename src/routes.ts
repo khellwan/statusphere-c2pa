@@ -6,6 +6,7 @@ import { isValidHandle } from '@atproto/syntax'
 import { TID } from '@atproto/common'
 import { Agent } from '@atproto/api'
 import express from 'express'
+import multer from 'multer'
 import { getIronSession } from 'iron-session'
 import type { AppContext } from '#/index'
 import { home } from '#/pages/home'
@@ -56,6 +57,21 @@ async function getSessionAgent(
 
 export const createRouter = (ctx: AppContext) => {
   const router = express.Router()
+
+  // Configure multer for image uploads
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 1024 * 1024 * 1, // 1MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true)
+      } else {
+        cb(new Error('Only image files are allowed'))
+      }
+    },
+  })
 
   // Static assets
   router.use('/public', express.static(path.join(__dirname, 'pages', 'public')))
@@ -329,10 +345,28 @@ export const createRouter = (ctx: AppContext) => {
       }
 
       // Parse facets (mentions, links, etc.)
-      const facets = parseFacets(text)
+      const facets = await parseFacets(text, ctx)
 
       // Detect language
       const langs = detectLanguages(text)
+
+      // Process image embed if provided
+      let embed: any = undefined
+      const imageBlobData = req.body?.imageBlob
+      if (imageBlobData) {
+        try {
+          const imageBlob = JSON.parse(imageBlobData)
+          embed = {
+            $type: 'app.bsky.embed.images',
+            images: [{
+              alt: '',  // Empty alt text for now
+              image: imageBlob,
+            }],
+          }
+        } catch (err) {
+          ctx.logger.warn({ err }, 'failed to parse image blob data')
+        }
+      }
 
       // Construct the post record
       const rkey = TID.nextStr()
@@ -350,6 +384,11 @@ export const createRouter = (ctx: AppContext) => {
       // Add language detection if confident
       if (langs.length > 0) {
         record.langs = langs
+      }
+
+      // Add embed if image was uploaded
+      if (embed) {
+        record.embed = embed
       }
 
       let uri
@@ -381,6 +420,8 @@ export const createRouter = (ctx: AppContext) => {
             text: record.text,
             facets: facets.length > 0 ? JSON.stringify(facets) : undefined,
             langs: langs.length > 0 ? JSON.stringify(langs) : undefined,
+            embedType: embed ? embed.$type : undefined,
+            embedData: embed ? JSON.stringify(embed) : undefined,
             createdAt: record.createdAt,
             indexedAt: new Date().toISOString(),
           })
@@ -396,6 +437,39 @@ export const createRouter = (ctx: AppContext) => {
     })
   )
 
+  // Image upload route
+  router.post(
+    '/upload-image',
+    upload.single('image'),
+    handler(async (req, res) => {
+      // If the user is signed in, get an agent which communicates with their server
+      const agent = await getSessionAgent(req, res, ctx)
+      if (!agent) {
+        return res.status(401).json({ error: 'Session required' })
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: 'No image file provided' })
+      }
+
+      try {
+        // Upload the image as a blob to the user's server
+        const uploadResponse = await agent.uploadBlob(new Uint8Array(req.file.buffer), {
+          encoding: req.file.mimetype,
+        })
+
+        return res.json({
+          success: true,
+          blob: uploadResponse.data.blob,
+          url: `https://cdn.bsky.app/img/feed_thumbnail/plain/${agent.assertDid}/${uploadResponse.data.blob.ref.toString()}@jpeg`,
+        })
+      } catch (err) {
+        ctx.logger.warn({ err }, 'failed to upload image')
+        return res.status(500).json({ error: 'Failed to upload image' })
+      }
+    })
+  )
+
   return router
 }
 
@@ -404,7 +478,7 @@ export const createRouter = (ctx: AppContext) => {
 /**
  * Parse facets (mentions, links, hashtags) from text
  */
-function parseFacets(text: string): any[] {
+async function parseFacets(text: string, ctx: AppContext): Promise<any[]> {
   const facets: any[] = []
   
   // Parse mentions (@handle or @did)
@@ -412,6 +486,17 @@ function parseFacets(text: string): any[] {
   let match
   while ((match = mentionRegex.exec(text)) !== null) {
     const handle = match[0].slice(1) // Remove @
+    
+    // Try to resolve handle to DID
+    let did: string
+    try {
+      const resolved = await ctx.resolver.resolveHandlesToDids([handle])
+      did = resolved[handle] || `did:placeholder:${handle}`
+    } catch (err) {
+      // Fallback to placeholder if resolution fails
+      did = `did:placeholder:${handle}`
+    }
+    
     facets.push({
       index: {
         byteStart: Buffer.from(text.slice(0, match.index)).length,
@@ -419,7 +504,7 @@ function parseFacets(text: string): any[] {
       },
       features: [{
         $type: 'app.bsky.richtext.facet#mention',
-        did: `did:placeholder:${handle}`, // In a real app, resolve handle to DID
+        did: did,
       }],
     })
   }

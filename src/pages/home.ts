@@ -98,7 +98,21 @@ function content({ statuses, posts, didHandleMap, profile, myStatus, myLatestPos
               class="post-textarea"
               oninput="updateCharCount(this)"
             ></textarea>
+            
+            <!-- Hidden field for image blob -->
+            <input type="hidden" name="imageBlob" id="image-blob-input" />
+            
+            <!-- Image Preview Area -->
+            <div id="image-preview" class="image-preview" style="display: none;">
+              <img id="preview-img" src="" alt="Preview" />
+              <button type="button" onclick="removeImage()" class="remove-image">×</button>
+            </div>
+            
             <div class="post-tools">
+              <div class="post-actions">
+                <input type="file" id="image-input" accept="image/*" style="display: none;" onchange="handleImageSelect(this)" />
+                <button type="button" onclick="document.getElementById('image-input').click()" class="image-btn">📷</button>
+              </div>
               <div class="char-count">
                 <span id="char-count">0</span>/300
               </div>
@@ -159,6 +173,60 @@ function content({ statuses, posts, didHandleMap, profile, myStatus, myLatestPos
         
         button.disabled = count === 0 || count > 300;
       }
+      
+      let uploadedImageBlob = null;
+      
+      function handleImageSelect(input) {
+        const file = input.files[0];
+        if (!file) return;
+        
+        // Show preview
+        const preview = document.getElementById('image-preview');
+        const previewImg = document.getElementById('preview-img');
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+          previewImg.src = e.target.result;
+          preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+        
+        // Upload image
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        fetch('/upload-image', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            uploadedImageBlob = data.blob;
+            // Save blob info to hidden field
+            document.getElementById('image-blob-input').value = JSON.stringify(data.blob);
+            console.log('Image uploaded successfully:', data);
+          } else {
+            alert('Failed to upload image: ' + data.error);
+            removeImage();
+          }
+        })
+        .catch(error => {
+          console.error('Upload error:', error);
+          alert('Failed to upload image');
+          removeImage();
+        });
+      }
+      
+      function removeImage() {
+        const preview = document.getElementById('image-preview');
+        const input = document.getElementById('image-input');
+        const blobInput = document.getElementById('image-blob-input');
+        preview.style.display = 'none';
+        input.value = '';
+        blobInput.value = '';
+        uploadedImageBlob = null;
+      }
     </script>
   </div>`
 }
@@ -198,6 +266,7 @@ function renderTimeline(posts: Post[], statuses: Status[], didHandleMap: Record<
               <span class="date">${date}</span>
             </div>
             <div class="post-text">${formatPostText(post.text)}</div>
+            ${renderPostEmbed(post)}
             ${post.langs ? html`<div class="post-langs">${JSON.parse(post.langs).join(', ')}</div>` : ''}
           </div>
         </div>
@@ -243,4 +312,38 @@ function formatDate(dateStr: string) {
   if (diffHours < 24) return `${diffHours}h`
   if (diffDays < 7) return `${diffDays}d`
   return date.toLocaleDateString()
+}
+
+function renderPostEmbed(post: Post) {
+  if (!post.embedType || !post.embedData) {
+    return ''
+  }
+
+  try {
+    const embedData = JSON.parse(post.embedData)
+    
+    if (post.embedType === 'app.bsky.embed.images') {
+      const images = embedData.images || []
+      return html`
+        <div class="post-images">
+          ${images.map((img: any) => html`
+            <div class="post-image">
+              <img src="${getBlobUrl(img.image)}" alt="${img.alt || ''}" />
+            </div>
+          `).join('')}
+        </div>
+      `
+    }
+    
+    return ''
+  } catch (err) {
+    console.error('Failed to render embed:', err)
+    return ''
+  }
+}
+
+function getBlobUrl(blob: any): string {
+  if (!blob || !blob.ref) return ''
+  // Generate CDN URL for the blob
+  return `https://cdn.bsky.app/img/feed_fullsize/plain/did:placeholder/${blob.ref.toString()}@jpeg`
 }

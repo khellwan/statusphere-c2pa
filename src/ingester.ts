@@ -55,6 +55,8 @@ export function createIngester(db: Database, idResolver: IdResolver) {
               text: record.text,
               facets: record.facets ? JSON.stringify(record.facets) : undefined,
               langs: record.langs ? JSON.stringify(record.langs) : undefined,
+              embedType: record.embed ? (record.embed as any).$type : undefined,
+              embedData: record.embed ? JSON.stringify(record.embed) : undefined,
               createdAt: record.createdAt,
               indexedAt: now.toISOString(),
             })
@@ -63,6 +65,8 @@ export function createIngester(db: Database, idResolver: IdResolver) {
                 text: record.text,
                 facets: record.facets ? JSON.stringify(record.facets) : undefined,
                 langs: record.langs ? JSON.stringify(record.langs) : undefined,
+                embedType: record.embed ? (record.embed as any).$type : undefined,
+                embedData: record.embed ? JSON.stringify(record.embed) : undefined,
                 indexedAt: now.toISOString(),
               })
             )
