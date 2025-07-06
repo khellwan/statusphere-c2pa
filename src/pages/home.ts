@@ -102,16 +102,43 @@ function content({ statuses, posts, didHandleMap, profile, myStatus, myLatestPos
             <!-- Hidden field for image blob -->
             <input type="hidden" name="imageBlob" id="image-blob-input" />
             
+            <!-- Hidden field for link URL -->
+            <input type="hidden" name="linkUrl" id="link-url-hidden" />
+            
+            <!-- Link input for external embeds -->
+            <div class="link-input-container" style="display: none;" id="link-input-container">
+              <input 
+                type="url" 
+                name="linkUrl" 
+                id="link-url-input"
+                placeholder="Paste a link to create a preview..."
+                class="link-input"
+                onblur="handleLinkInput(this)"
+              />
+              <button type="button" onclick="removeLinkPreview()" class="remove-link">×</button>
+            </div>
+            
             <!-- Image Preview Area -->
             <div id="image-preview" class="image-preview" style="display: none;">
               <img id="preview-img" src="" alt="Preview" />
               <button type="button" onclick="removeImage()" class="remove-image">×</button>
             </div>
             
+            <!-- Link Preview Area -->
+            <div id="link-preview" class="link-preview" style="display: none;">
+              <div class="link-preview-content">
+                <div class="link-preview-title" id="link-title"></div>
+                <div class="link-preview-description" id="link-description"></div>
+                <div class="link-preview-url" id="link-url"></div>
+              </div>
+              <button type="button" onclick="removeLinkPreview()" class="remove-link-preview">×</button>
+            </div>
+            
             <div class="post-tools">
               <div class="post-actions">
                 <input type="file" id="image-input" accept="image/*" style="display: none;" onchange="handleImageSelect(this)" />
                 <button type="button" onclick="document.getElementById('image-input').click()" class="image-btn">📷</button>
+                <button type="button" onclick="toggleLinkInput()" class="link-btn" id="link-btn">🔗</button>
               </div>
               <div class="char-count">
                 <span id="char-count">0</span>/300
@@ -227,8 +254,125 @@ function content({ statuses, posts, didHandleMap, profile, myStatus, myLatestPos
         blobInput.value = '';
         uploadedImageBlob = null;
       }
+      
+      function toggleLinkInput() {
+        const container = document.getElementById('link-input-container');
+        const input = document.getElementById('link-url-input');
+        
+        if (container.style.display === 'none') {
+          container.style.display = 'block';
+          input.focus();
+        } else {
+          container.style.display = 'none';
+          removeLinkPreview();
+        }
+      }
+      
+      function handleLinkInput(input) {
+        const url = input.value.trim();
+        if (!url) {
+          removeLinkPreview();
+          return;
+        }
+        
+        // Basic URL validation
+        try {
+          new URL(url);
+        } catch (e) {
+          return;
+        }
+        
+        // For now, just show a simple preview
+        // In a real app, you'd fetch meta tags from the URL
+        showLinkPreview(url, 'Link Preview', 'Click to visit this link', url);
+      }
+      
+      function showLinkPreview(url, title, description, displayUrl) {
+        const preview = document.getElementById('link-preview');
+        const titleEl = document.getElementById('link-title');
+        const descEl = document.getElementById('link-description');
+        const urlEl = document.getElementById('link-url');
+        const hiddenInput = document.getElementById('link-url-hidden');
+        
+        titleEl.textContent = title;
+        descEl.textContent = description;
+        urlEl.textContent = displayUrl;
+        hiddenInput.value = url; // Set the hidden field value
+        
+        preview.style.display = 'block';
+        
+        // Hide link input after showing preview
+        document.getElementById('link-input-container').style.display = 'none';
+      }
+      
+      function removeLinkPreview() {
+        const preview = document.getElementById('link-preview');
+        const input = document.getElementById('link-url-input');
+        const container = document.getElementById('link-input-container');
+        const hiddenInput = document.getElementById('link-url-hidden');
+        
+        preview.style.display = 'none';
+        container.style.display = 'none';
+        input.value = '';
+        hiddenInput.value = ''; // Clear the hidden field
+      }
     </script>
   </div>`
+}
+
+function renderPostEmbedHtml(post: Post): string {
+  if (!post.embedType || !post.embedData) {
+    return ''
+  }
+
+  try {
+    const embedData = JSON.parse(post.embedData)
+    
+    if (post.embedType === 'app.bsky.embed.images') {
+      const images = embedData.images || []
+      
+      if (images.length === 0) {
+        return ''
+      }
+      
+      const imageElements = images.map((img: any) => {
+        const imageUrl = getBlobUrl(img.image, post.authorDid)
+        return `<div class="post-image">
+          <img src="${imageUrl}" alt="${img.alt || ''}" />
+        </div>`
+      }).join('')
+      
+      return `<div class="post-images">${imageElements}</div>`
+    }
+    
+    if (post.embedType === 'app.bsky.embed.external') {
+      const external = embedData.external
+      if (!external || !external.uri) {
+        return ''
+      }
+      
+      const thumbUrl = external.thumb ? getBlobUrl(external.thumb, post.authorDid) : ''
+      const thumbHtml = thumbUrl ? `<div class="external-thumb"><img src="${thumbUrl}" alt="" /></div>` : ''
+      
+      return `
+        <div class="post-external">
+          <a href="${external.uri}" target="_blank" rel="noopener noreferrer" class="external-link">
+            ${thumbHtml}
+            <div class="external-content">
+              <div class="external-title">${external.title || ''}</div>
+              <div class="external-description">${external.description || ''}</div>
+              <div class="external-url">${external.uri}</div>
+            </div>
+          </a>
+        </div>
+      `
+    }
+    
+    return ''
+  } catch (err) {
+    console.error('Failed to render embed:', err)
+    return ''
+  }
 }
 
 function toBskyLink(did: string) {
@@ -265,7 +409,7 @@ function renderTimeline(posts: Post[], statuses: Status[], didHandleMap: Record<
               <a class="author" href=${toBskyLink(handle)}>@${handle}</a>
               <span class="date">${date}</span>
             </div>
-            <div class="post-text">${formatPostText(post.text)}</div>
+            <div class="post-text">${post.text}</div>
             ${renderPostEmbed(post)}
             ${post.langs ? html`<div class="post-langs">${JSON.parse(post.langs).join(', ')}</div>` : ''}
           </div>
@@ -291,8 +435,11 @@ function renderTimeline(posts: Post[], statuses: Status[], didHandleMap: Record<
 }
 
 function formatPostText(text: string) {
-  // Basic text formatting - will be enhanced later with facets
+  // Simple text formatting with proper escaping
   return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
     .replace(/\n/g, '<br>')
     .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
     .replace(/@([a-zA-Z0-9.-]+)/g, '<span class="mention">@$1</span>')
@@ -324,13 +471,49 @@ function renderPostEmbed(post: Post) {
     
     if (post.embedType === 'app.bsky.embed.images') {
       const images = embedData.images || []
+      
+      if (images.length === 0) {
+        return ''
+      }
+      
+      const firstImage = images[0]
+      if (!firstImage || !firstImage.image) {
+        return ''
+      }
+      
+      const imageUrl = getBlobUrl(firstImage.image, post.authorDid)
+      
       return html`
         <div class="post-images">
-          ${images.map((img: any) => html`
-            <div class="post-image">
-              <img src="${getBlobUrl(img.image)}" alt="${img.alt || ''}" />
+          <div class="post-image">
+            <img src="${imageUrl}" alt="${firstImage.alt || ''}" />
+          </div>
+        </div>
+      `
+    }
+    
+    if (post.embedType === 'app.bsky.embed.external') {
+      const external = embedData.external
+      if (!external || !external.uri) {
+        return ''
+      }
+      
+      const thumbUrl = external.thumb ? getBlobUrl(external.thumb, post.authorDid) : ''
+      
+      return html`
+        <div class="post-external">
+          <a href="${external.uri}" target="_blank" rel="noopener noreferrer" class="external-link">
+            ${thumbUrl ? html`
+              <div class="external-thumb">
+                <img src="${thumbUrl}" alt="" />
+              </div>
+            ` : ''}
+            <div class="external-content">
+              <div class="external-title">${external.title || ''}</div>
+              <div class="external-description">${external.description || ''}</div>
+              <div class="external-url">${external.uri}</div>
             </div>
-          `).join('')}
+          </a>
         </div>
       `
     }
@@ -342,8 +525,32 @@ function renderPostEmbed(post: Post) {
   }
 }
 
-function getBlobUrl(blob: any): string {
-  if (!blob || !blob.ref) return ''
-  // Generate CDN URL for the blob
-  return `https://cdn.bsky.app/img/feed_fullsize/plain/did:placeholder/${blob.ref.toString()}@jpeg`
+function getBlobUrl(blob: any, authorDid: string): string {
+  if (!blob) {
+    return ''
+  }
+  
+  // Try different ways to extract the CID
+  let cid = ''
+  
+  if (blob.ref) {
+    if (blob.ref.$link) {
+      cid = blob.ref.$link
+    } else if (typeof blob.ref === 'string') {
+      cid = blob.ref
+    } else {
+      cid = blob.ref.toString()
+    }
+  } else if (blob.$link) {
+    cid = blob.$link
+  } else if (typeof blob === 'string') {
+    cid = blob
+  } else {
+    return ''
+  }
+  
+  // Generate the CDN URL
+  const url = `https://cdn.bsky.app/img/feed_fullsize/plain/${authorDid}/${cid}@jpeg`
+  
+  return url
 }

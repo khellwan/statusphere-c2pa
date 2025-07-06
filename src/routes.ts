@@ -368,6 +368,24 @@ export const createRouter = (ctx: AppContext) => {
         }
       }
 
+      // Process external link embed if provided (and no image)
+      const linkUrl = req.body?.linkUrl
+      if (!embed && linkUrl && typeof linkUrl === 'string') {
+        try {
+          new URL(linkUrl) // Validate URL
+          embed = {
+            $type: 'app.bsky.embed.external',
+            external: {
+              uri: linkUrl,
+              title: 'Link Preview',
+              description: 'Click to visit this link',
+            },
+          }
+        } catch (err) {
+          ctx.logger.warn({ err, linkUrl }, 'invalid URL provided for external embed')
+        }
+      }
+
       // Construct the post record
       const rkey = TID.nextStr()
       const record: any = {
