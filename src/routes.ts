@@ -455,6 +455,77 @@ export const createRouter = (ctx: AppContext) => {
     })
   )
 
+  // C2PA validation route
+  router.post(
+    '/manifests/validate',
+    handler(async (req, res) => {
+      try {
+        const { imageUrl, format } = req.body
+
+        if (!imageUrl || !format) {
+          return res.status(400).json({ 
+            error: 'Missing required parameters',
+            message: 'Both imageUrl and format are required' 
+          })
+        }
+
+        // Validate format is a proper MIME type
+        if (!format.startsWith('image/')) {
+          return res.status(400).json({ 
+            error: 'Invalid format',
+            message: 'Format should be a MIME type like image/jpeg, image/png, etc.' 
+          })
+        }
+
+        // Download the image from the backend (to avoid CORS issues)
+        const imageResponse = await fetch(imageUrl);
+        
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to download image: ${imageResponse.status}`);
+        }
+
+        const arrayBuffer = await imageResponse.arrayBuffer();
+        const base64 = Buffer.from(arrayBuffer).toString('base64');
+
+        // Check if C2PA API is configured
+        const C2PA_API_ENDPOINT = process.env.C2PA_API_ENDPOINT
+        
+        if (!C2PA_API_ENDPOINT) {
+          return res.json({
+            error: 'C2PA API not configured',
+            message: 'The C2PA validation service is not configured. Please set C2PA_API_ENDPOINT in your environment variables.'
+          })
+        }
+        
+        const response = await fetch(C2PA_API_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fileData: base64,
+            format
+          })
+        })
+
+        if (!response.ok) {
+          throw new Error(`C2PA API responded with status: ${response.status}`)
+        }
+
+        const validationResult = await response.json()
+        
+        return res.json(validationResult)
+        
+      } catch (err) {
+        ctx.logger.error({ err }, 'Failed to validate C2PA credentials')
+        return res.status(500).json({ 
+          error: 'Validation failed',
+          message: err instanceof Error ? err.message : 'Unknown error occurred during validation'
+        })
+      }
+    })
+  )
+
   // Image upload route
   router.post(
     '/upload-image',

@@ -163,7 +163,7 @@ function content({ statuses, posts, didHandleMap, profile, myStatus, myLatestPos
             )}
           </form>
         </div>
-      ` : ''}
+      ` : html``}
       
       <!-- Timeline -->
       <div class="timeline">
@@ -316,6 +316,301 @@ function content({ statuses, posts, didHandleMap, profile, myStatus, myLatestPos
         input.value = '';
         hiddenInput.value = ''; // Clear the hidden field
       }
+
+      // Add C2PA buttons to images after page loads
+      document.addEventListener('DOMContentLoaded', function() {
+        addC2PAButtons();
+      });
+
+      function addC2PAButtons() {
+        const images = document.querySelectorAll('.post-image img');
+        images.forEach(img => {
+          const container = img.parentElement;
+          if (container && !container.querySelector('.c2pa-info-btn')) {
+            const button = document.createElement('button');
+            button.className = 'c2pa-info-btn';
+            button.innerHTML = 'ℹ️';
+            button.title = 'Check content credentials';
+            button.onclick = function() {
+              checkC2PACredentials(img.src, this);
+            };
+            container.appendChild(button);
+          }
+        });
+      }
+
+      function checkC2PACredentials(imageUrl, button) {
+        button.innerHTML = '⏳';
+        button.disabled = true;
+        
+        // Extract format from URL and convert to MIME type
+        const urlParts = imageUrl.split('.');
+        const extension = urlParts[urlParts.length - 1].split('@')[0]; // Remove @jpeg suffix if present
+        let format;
+        
+        switch (extension?.toLowerCase()) {
+          case 'jpg':
+          case 'jpeg':
+            format = 'image/jpeg';
+            break;
+          case 'png':
+            format = 'image/png';
+            break;
+          case 'webp':
+            format = 'image/webp';
+            break;
+          case 'gif':
+            format = 'image/gif';
+            break;
+          default:
+            format = 'image/jpeg'; // Default fallback
+        }
+        
+        // Send the image URL to the backend (backend will download it to avoid CORS)
+        fetch('/manifests/validate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageUrl: imageUrl,
+            format: format
+          })
+        })
+        .then(response => {
+          if (!response.ok) {
+            return response.text().then(errorText => {
+              throw new Error('Backend error: ' + response.status + ' - ' + errorText);
+            });
+          }
+          
+          return response.json();
+        })
+        .then(result => {
+          showC2PAModal(result);
+        })
+        .catch(error => {
+          showC2PAModal({
+            error: 'Validation failed',
+            message: error.message || 'Failed to validate C2PA credentials'
+          });
+        })
+        .finally(() => {
+          button.innerHTML = 'ℹ️';
+          button.disabled = false;
+        });
+      }
+      
+      function showC2PAModal(data) {
+        const modal = document.createElement('div');
+        modal.className = 'c2pa-modal';
+        modal.innerHTML = \`
+          <div class="c2pa-modal-content">
+            <div class="c2pa-modal-header">
+              <h3>Content Credentials</h3>
+              <span class="c2pa-close">&times;</span>
+            </div>
+            <div class="c2pa-modal-body">
+              \${formatC2PAData(data)}
+            </div>
+          </div>
+        \`;
+        
+        document.body.appendChild(modal);
+        modal.style.display = 'block';
+        
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal || e.target.classList.contains('c2pa-close')) {
+            modal.remove();
+          }
+        });
+      }
+      
+      function formatC2PAData(data) {
+        if (!data) {
+          return \`
+            <div class="c2pa-no-credentials">
+              <h4>📄 No Content Credentials Found</h4>
+              <p>This image does not contain C2PA content credentials.</p>
+            </div>
+          \`;
+        }
+        
+        if (data.error) {
+          return \`
+            <div class="c2pa-error">
+              <h4>❌ \${data.error}</h4>
+              <p>\${data.message || 'An error occurred while validating the image.'}</p>
+              \${data.error === 'C2PA API not configured' ? \`
+                <div class="c2pa-config-help">
+                  <p><strong>To enable this feature:</strong></p>
+                  <ol>
+                    <li>Set up a C2PA validation service</li>
+                    <li>Configure <code>C2PA_API_ENDPOINT</code> in your environment</li>
+                    <li>Optionally set <code>C2PA_API_KEY</code> if authentication is required</li>
+                  </ol>
+                  <p>See the README for more details.</p>
+                </div>
+              \` : ''}
+            </div>
+          \`;
+        }
+        
+        // Check if we have valid C2PA data (multiple possible formats)
+        const hasValidData = data.isValid === true || 
+                            data.valid === true || 
+                            (data.message && typeof data.message === 'object') ||
+                            (data.manifests && Array.isArray(data.manifests) && data.manifests.length > 0) ||
+                            (data.assertions && Array.isArray(data.assertions)) ||
+                            data.claim_generator_info ||
+                            data.signature_info;
+        
+        if (!hasValidData) {
+          return \`
+            <div class="c2pa-no-credentials">
+              <h4>📄 No Content Credentials Found</h4>
+              <p>This image does not contain C2PA content credentials or they could not be validated.</p>
+            </div>
+          \`;
+        }
+        
+        let html = '<div class="c2pa-success"><h4>✅ Content Credentials Found</h4></div>';
+        
+        // Handle different response formats
+        if (data.message && typeof data.message === 'object') {
+          // This is the format you're getting from your API
+          const message = data.message;
+          
+          html += \`
+            <div class="c2pa-manifest">
+              <h4>Content Credentials Details</h4>
+              \${data.isValid !== undefined ? \`
+                <div class="c2pa-field">
+                  <strong>Validation Status:</strong> \${data.isValid ? '✅ Valid' : '❌ Invalid'}
+                </div>
+              \` : ''}
+              \${message.format ? \`
+                <div class="c2pa-field">
+                  <strong>Format:</strong> \${message.format}
+                </div>
+              \` : ''}
+              \${message.instance_id ? \`
+                <div class="c2pa-field">
+                  <strong>Instance ID:</strong> \${message.instance_id.slice(0, 20)}...
+                </div>
+              \` : ''}
+              \${message.title ? \`
+                <div class="c2pa-field">
+                  <strong>Title:</strong> \${message.title}
+                </div>
+              \` : ''}
+            </div>
+          \`;
+          
+          // Show claim generator info
+          if (data.claim_generator_info && Array.isArray(data.claim_generator_info) && data.claim_generator_info.length > 0) {
+            const generator = data.claim_generator_info[0];
+            html += \`
+              <div class="c2pa-manifest">
+                <h4>Claim Generator</h4>
+                <div class="c2pa-field">
+                  <strong>Generator:</strong> \${generator}
+                </div>
+              </div>
+            \`;
+          }
+          
+          // Show signature info
+          if (data.signature_info) {
+            const sig = data.signature_info;
+            html += \`
+              <div class="c2pa-manifest">
+                <h4>Signature Information</h4>
+                \${sig.alg ? \`
+                  <div class="c2pa-field">
+                    <strong>Algorithm:</strong> \${sig.alg}
+                  </div>
+                \` : ''}
+                \${sig.issuer ? \`
+                  <div class="c2pa-field">
+                    <strong>Issuer:</strong> \${sig.issuer}
+                  </div>
+                \` : ''}
+                \${sig.cert_serial_number ? \`
+                  <div class="c2pa-field">
+                    <strong>Certificate Serial:</strong> \${sig.cert_serial_number}
+                  </div>
+                \` : ''}
+              </div>
+            \`;
+          }
+          
+          // Show assertions
+          if (data.assertions && Array.isArray(data.assertions) && data.assertions.length > 0) {
+            html += \`
+              <div class="c2pa-manifest">
+                <h4>Assertions</h4>
+                <div class="c2pa-assertions">
+                  <ul>
+                    \${data.assertions.map(assertion => {
+                      if (typeof assertion === 'string') {
+                        return \`<li>\${assertion}</li>\`;
+                      } else if (assertion && assertion.label) {
+                        return \`<li><strong>\${assertion.label}:</strong> \${JSON.stringify(assertion.data || assertion, null, 2)}</li>\`;
+                      } else {
+                        return \`<li>\${JSON.stringify(assertion, null, 2)}</li>\`;
+                      }
+                    }).join('')}
+                  </ul>
+                </div>
+              </div>
+            \`;
+          }
+        } else if (data.manifests && Array.isArray(data.manifests) && data.manifests.length > 0) {
+          // Handle standard manifest format
+          data.manifests.forEach((manifest, index) => {
+            if (!manifest) return;
+            
+            html += \`
+              <div class="c2pa-manifest">
+                <h4>Manifest \${index + 1}</h4>
+                <div class="c2pa-field">
+                  <strong>Title:</strong> \${manifest.title || 'N/A'}
+                </div>
+                <div class="c2pa-field">
+                  <strong>Format:</strong> \${manifest.format || 'N/A'}
+                </div>
+                <div class="c2pa-field">
+                  <strong>Instance ID:</strong> \${manifest.instance_id || 'N/A'}
+                </div>
+                \${manifest.claim_generator ? \`
+                  <div class="c2pa-field">
+                    <strong>Claim Generator:</strong> \${manifest.claim_generator}
+                  </div>
+                \` : ''}
+                \${manifest.signature_info ? \`
+                  <div class="c2pa-field">
+                    <strong>Signature:</strong> \${manifest.signature_info.validated ? '✅ Valid' : '❌ Invalid'}
+                  </div>
+                \` : ''}
+                \${manifest.assertions && Array.isArray(manifest.assertions) && manifest.assertions.length > 0 ? \`
+                  <div class="c2pa-assertions">
+                    <strong>Assertions:</strong>
+                    <ul>
+                      \${manifest.assertions.map(assertion => {
+                        if (!assertion) return '<li>Invalid assertion</li>';
+                        return \`<li><strong>\${assertion.label || 'Unknown'}:</strong> \${JSON.stringify(assertion.data || {}, null, 2)}</li>\`;
+                      }).join('')}
+                    </ul>
+                  </div>
+                \` : ''}
+              </div>
+            \`;
+          });
+        }
+        
+        return html;
+      }
     </script>
   </div>`
 }
@@ -389,8 +684,8 @@ function ts(status: Status) {
 function renderTimeline(posts: Post[], statuses: Status[], didHandleMap: Record<string, string>) {
   // Combine posts and statuses into a unified timeline
   const timelineItems = [
-    ...posts.map(post => ({ type: 'post' as const, data: post, createdAt: post.createdAt })),
-    ...statuses.map(status => ({ type: 'status' as const, data: status, createdAt: status.createdAt }))
+    ...posts.filter(post => post && post.authorDid && post.text !== null).map(post => ({ type: 'post' as const, data: post, createdAt: post.createdAt })),
+    ...statuses.filter(status => status && status.authorDid && status.status).map(status => ({ type: 'status' as const, data: status, createdAt: status.createdAt }))
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
   return html`${timelineItems.map((item, i) => {
@@ -409,9 +704,9 @@ function renderTimeline(posts: Post[], statuses: Status[], didHandleMap: Record<
               <a class="author" href=${toBskyLink(handle)}>@${handle}</a>
               <span class="date">${date}</span>
             </div>
-            <div class="post-text">${post.text}</div>
+            <div class="post-text">${post.text || ''}</div>
             ${renderPostEmbed(post)}
-            ${post.langs ? html`<div class="post-langs">${JSON.parse(post.langs).join(', ')}</div>` : ''}
+            ${post.langs ? html`<div class="post-langs">${JSON.parse(post.langs).join(', ')}</div>` : html``}
           </div>
         </div>
       `
@@ -463,7 +758,7 @@ function formatDate(dateStr: string) {
 
 function renderPostEmbed(post: Post) {
   if (!post.embedType || !post.embedData) {
-    return ''
+    return html``
   }
 
   try {
@@ -473,12 +768,12 @@ function renderPostEmbed(post: Post) {
       const images = embedData.images || []
       
       if (images.length === 0) {
-        return ''
+        return html``
       }
       
       const firstImage = images[0]
       if (!firstImage || !firstImage.image) {
-        return ''
+        return html``
       }
       
       const imageUrl = getBlobUrl(firstImage.image, post.authorDid)
@@ -495,7 +790,7 @@ function renderPostEmbed(post: Post) {
     if (post.embedType === 'app.bsky.embed.external') {
       const external = embedData.external
       if (!external || !external.uri) {
-        return ''
+        return html``
       }
       
       const thumbUrl = external.thumb ? getBlobUrl(external.thumb, post.authorDid) : ''
@@ -507,7 +802,7 @@ function renderPostEmbed(post: Post) {
               <div class="external-thumb">
                 <img src="${thumbUrl}" alt="" />
               </div>
-            ` : ''}
+            ` : html``}
             <div class="external-content">
               <div class="external-title">${external.title || ''}</div>
               <div class="external-description">${external.description || ''}</div>
@@ -518,10 +813,10 @@ function renderPostEmbed(post: Post) {
       `
     }
     
-    return ''
+    return html``
   } catch (err) {
     console.error('Failed to render embed:', err)
-    return ''
+    return html``
   }
 }
 
