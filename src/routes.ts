@@ -369,7 +369,13 @@ export const createRouter = (ctx: AppContext) => {
       }
 
       // Process external link embed if provided (and no image)
-      const linkUrl = req.body?.linkUrl
+      let linkUrl = req.body?.linkUrl
+      
+      // Handle case where linkUrl might be an array (multiple fields with same name)
+      if (Array.isArray(linkUrl)) {
+        linkUrl = linkUrl.find(url => url && url.trim()) || linkUrl[linkUrl.length - 1]
+      }
+      
       if (!embed && linkUrl && typeof linkUrl === 'string') {
         try {
           new URL(linkUrl) // Validate URL

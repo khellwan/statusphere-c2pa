@@ -109,7 +109,6 @@ function content({ statuses, posts, didHandleMap, profile, myStatus, myLatestPos
             <div class="link-input-container" style="display: none;" id="link-input-container">
               <input 
                 type="url" 
-                name="linkUrl" 
                 id="link-url-input"
                 placeholder="Paste a link to create a preview..."
                 class="link-input"
@@ -279,11 +278,11 @@ function content({ statuses, posts, didHandleMap, profile, myStatus, myLatestPos
         try {
           new URL(url);
         } catch (e) {
+          removeLinkPreview();
           return;
         }
         
         // For now, just show a simple preview
-        // In a real app, you'd fetch meta tags from the URL
         showLinkPreview(url, 'Link Preview', 'Click to visit this link', url);
       }
       
@@ -294,8 +293,21 @@ function content({ statuses, posts, didHandleMap, profile, myStatus, myLatestPos
         const urlEl = document.getElementById('link-url');
         const hiddenInput = document.getElementById('link-url-hidden');
         
-        titleEl.textContent = title;
-        descEl.textContent = description;
+        // Check if it's an image URL and customize the preview
+        const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'svg'];
+        const urlLower = url.toLowerCase();
+        const isImageUrl = imageExtensions.some(ext => 
+          urlLower.includes('.' + ext) || urlLower.includes('.' + ext + '?')
+        );
+        
+        if (isImageUrl) {
+          titleEl.textContent = 'Image Link';
+          descEl.textContent = 'This image will be displayed in your post';
+        } else {
+          titleEl.textContent = title;
+          descEl.textContent = description;
+        }
+        
         urlEl.textContent = displayUrl;
         hiddenInput.value = url; // Set the hidden field value
         
@@ -646,6 +658,19 @@ function renderPostEmbedHtml(post: Post): string {
         return ''
       }
       
+      // Check if the external URL is an image
+      const isImageUrl = /\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg)(\?.*)?$/i.test(external.uri)
+      
+      if (isImageUrl) {
+        // Render as image instead of external link to enable C2PA validation
+        return `<div class="post-images">
+          <div class="post-image">
+            <img src="${external.uri}" alt="${external.title || external.description || ''}" />
+          </div>
+        </div>`
+      }
+      
+      // Regular external link rendering for non-image URLs
       const thumbUrl = external.thumb ? getBlobUrl(external.thumb, post.authorDid) : ''
       const thumbHtml = thumbUrl ? `<div class="external-thumb"><img src="${thumbUrl}" alt="" /></div>` : ''
       
@@ -793,6 +818,21 @@ function renderPostEmbed(post: Post) {
         return html``
       }
       
+      // Check if the external URL is an image
+      const isImageUrl = /\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg)(\?.*)?$/i.test(external.uri)
+      
+      if (isImageUrl) {
+        // Render as image instead of external link to enable C2PA validation
+        return html`
+          <div class="post-images">
+            <div class="post-image">
+              <img src="${external.uri}" alt="${external.title || external.description || ''}" />
+            </div>
+          </div>
+        `
+      }
+      
+      // Regular external link rendering for non-image URLs
       const thumbUrl = external.thumb ? getBlobUrl(external.thumb, post.authorDid) : ''
       
       return html`
