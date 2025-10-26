@@ -519,33 +519,40 @@ function content({ statuses, posts, didHandleMap, profile, myStatus, myLatestPos
             </div>
           \`;
           
-          // Show claim generator info
-          if (data.claim_generator_info && Array.isArray(data.claim_generator_info) && data.claim_generator_info.length > 0) {
-            const generator = data.claim_generator_info[0];
+          // Show claim generator info (author)
+          if (message.claim_generator_info && Array.isArray(message.claim_generator_info) && message.claim_generator_info.length > 0) {
+            const generator = message.claim_generator_info[0];
             html += \`
               <div class="c2pa-manifest">
-                <h4>Claim Generator</h4>
-                <div class="c2pa-field">
-                  <strong>Generator:</strong> \${generator}
-                </div>
+                <h4>Author Information</h4>
+                \${generator.name ? \`
+                  <div class="c2pa-field">
+                    <strong>Author:</strong> \${generator.name}
+                  </div>
+                \` : ''}
+                \${generator['org.contentauth.c2pa_rs'] ? \`
+                  <div class="c2pa-field">
+                    <strong>C2PA Version:</strong> \${generator['org.contentauth.c2pa_rs']}
+                  </div>
+                \` : ''}
               </div>
             \`;
           }
           
           // Show signature info
-          if (data.signature_info) {
-            const sig = data.signature_info;
+          if (message.signature_info) {
+            const sig = message.signature_info;
             html += \`
               <div class="c2pa-manifest">
                 <h4>Signature Information</h4>
-                \${sig.alg ? \`
-                  <div class="c2pa-field">
-                    <strong>Algorithm:</strong> \${sig.alg}
-                  </div>
-                \` : ''}
                 \${sig.issuer ? \`
                   <div class="c2pa-field">
                     <strong>Issuer:</strong> \${sig.issuer}
+                  </div>
+                \` : ''}
+                \${sig.alg ? \`
+                  <div class="c2pa-field">
+                    <strong>Algorithm:</strong> \${sig.alg}
                   </div>
                 \` : ''}
                 \${sig.cert_serial_number ? \`
