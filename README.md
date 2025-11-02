@@ -1,4 +1,4 @@
-# AT Protocol "Statusphere" Example App
+# C2PA-enabled Statusphere fork for authenticity verification
 
 An example application covering:
 
